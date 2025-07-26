@@ -1,0 +1,10 @@
+[[worker]]
+
+[worker.config]
+id = "demo-worker"
+enabled = true
+timeout = 30
+retries = 3
+secret = "d3362dcbf144ed9bc2f75f79ddc81b53"
+[worker.local_source]
+packages = [ "./githubconnector",]
