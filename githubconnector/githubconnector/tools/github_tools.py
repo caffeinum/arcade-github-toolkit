@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional, Annotated
 from datetime import datetime, timezone
+import json
 from arcade_tdk import tool, ToolContext
 from arcade_core.auth import GitHub
 from github import Github, GithubException
@@ -23,30 +24,36 @@ def list_recent_repos(
     context: ToolContext,
     limit: Annotated[int, "Maximum number of repositories to return"] = 10,
     include_private: Annotated[bool, "Whether to include private repositories"] = True,
-) -> List[Dict[str, Any]]:
+) -> str:
     """List recent repositories the user has access to."""
-    github = Github(context.authorization.token)
-    user = github.get_user()
-    
-    repos = []
-    for repo in user.get_repos(sort="updated", direction="desc"):
-        if len(repos) >= limit:
-            break
-        if not include_private and repo.private:
-            continue
-            
-        repos.append({
-            "name": repo.name,
-            "full_name": repo.full_name,
-            "description": repo.description,
-            "private": repo.private,
-            "url": repo.html_url,
-            "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
-            "language": repo.language,
-            "default_branch": repo.default_branch,
-        })
-    
-    return repos
+    try:
+        github = Github(context.authorization.token)
+        user = github.get_user()
+        
+        repos = []
+        for repo in user.get_repos(sort="updated", direction="desc"):
+            if len(repos) >= limit:
+                break
+            if not include_private and repo.private:
+                continue
+                
+            repos.append({
+                "name": repo.name,
+                "full_name": repo.full_name,
+                "description": repo.description,
+                "private": repo.private,
+                "url": repo.html_url,
+                "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
+                "language": repo.language,
+                "default_branch": repo.default_branch,
+            })
+        
+        result = json.dumps(repos, indent=2)
+        # ensure we're returning a string
+        assert isinstance(result, str), f"Expected string, got {type(result)}"
+        return result
+    except Exception as e:
+        return json.dumps({"error": str(e), "type": str(type(e))})
 
 
 @tool(
@@ -59,7 +66,7 @@ def create_branch(
     repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
     branch_name: Annotated[str, "Name of the new branch to create"],
     base_branch: Annotated[Optional[str], "Base branch to create from (defaults to repo's default branch)"] = None,
-) -> Dict[str, Any]:
+) -> str:
     """Create a new branch in a repository."""
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
@@ -70,12 +77,13 @@ def create_branch(
     base_ref = repo.get_branch(base_branch)
     repo.create_git_ref(f"refs/heads/{branch_name}", base_ref.commit.sha)
     
-    return {
+    result = {
         "branch_name": branch_name,
         "base_branch": base_branch,
         "created": True,
         "url": f"{repo.html_url}/tree/{branch_name}",
     }
+    return json.dumps(result, indent=2)
 
 
 @tool(
@@ -90,7 +98,7 @@ def commit_changes(
     file_path: Annotated[str, "Path to the file in the repository"],
     content: Annotated[str, "New content of the file"],
     commit_message: Annotated[str, "Commit message describing the changes"],
-) -> Dict[str, Any]:
+) -> str:
     """Commit changes to a file in a repository."""
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
@@ -112,13 +120,14 @@ def commit_changes(
             branch=branch,
         )
     
-    return {
+    output = {
         "file_path": file_path,
         "commit_sha": result["commit"].sha,
         "commit_message": commit_message,
         "branch": branch,
         "url": result["content"].html_url,
     }
+    return json.dumps(output, indent=2)
 
 
 @tool(
@@ -133,7 +142,7 @@ def create_pull_request(
     body: Annotated[str, "Description of the pull request"],
     head_branch: Annotated[str, "Branch containing the changes"],
     base_branch: Annotated[Optional[str], "Branch to merge into (defaults to repo's default branch)"] = None,
-) -> Dict[str, Any]:
+) -> str:
     """Create a pull request in a repository."""
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
@@ -148,7 +157,7 @@ def create_pull_request(
         base=base_branch,
     )
     
-    return {
+    result = {
         "number": pr.number,
         "title": pr.title,
         "url": pr.html_url,
@@ -157,6 +166,7 @@ def create_pull_request(
         "head_branch": head_branch,
         "base_branch": base_branch,
     }
+    return json.dumps(result, indent=2)
 
 
 @tool(
@@ -171,7 +181,7 @@ def create_issue(
     body: Annotated[str, "Description of the issue"],
     labels: Annotated[Optional[List[str]], "List of label names to apply"] = None,
     assignees: Annotated[Optional[List[str]], "List of usernames to assign"] = None,
-) -> Dict[str, Any]:
+) -> str:
     """Create an issue in a repository."""
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
@@ -183,7 +193,7 @@ def create_issue(
         assignees=assignees or [],
     )
     
-    return {
+    result = {
         "number": issue.number,
         "title": issue.title,
         "url": issue.html_url,
@@ -192,6 +202,7 @@ def create_issue(
         "labels": [label.name for label in issue.labels],
         "assignees": [user.login for user in issue.assignees],
     }
+    return json.dumps(result, indent=2)
 
 
 @tool(
@@ -204,7 +215,7 @@ def comment_on_pr(
     repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
     pr_number: Annotated[int, "Pull request number"],
     comment: Annotated[str, "Comment text to post"],
-) -> Dict[str, Any]:
+) -> str:
     """Leave a comment on a pull request."""
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
@@ -212,10 +223,11 @@ def comment_on_pr(
     
     comment_obj = pr.create_issue_comment(comment)
     
-    return {
+    result = {
         "comment_id": comment_obj.id,
         "pr_number": pr_number,
         "comment": comment,
         "created_at": comment_obj.created_at.isoformat(),
         "url": comment_obj.html_url,
     }
+    return json.dumps(result, indent=2)
