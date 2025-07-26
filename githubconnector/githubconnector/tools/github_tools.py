@@ -21,8 +21,8 @@ from github.Issue import Issue
 )
 def list_recent_repos(
     context: ToolContext,
-    limit: int = 10,
-    include_private: bool = True,
+    limit: Annotated[int, "Maximum number of repositories to return"] = 10,
+    include_private: Annotated[bool, "Whether to include private repositories"] = True,
 ) -> List[Dict[str, Any]]:
     """List recent repositories the user has access to."""
     github = Github(context.authorization.token)
@@ -56,9 +56,9 @@ def list_recent_repos(
 )
 def create_branch(
     context: ToolContext,
-    repo_full_name: str,
-    branch_name: str,
-    base_branch: Optional[str] = None,
+    repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
+    branch_name: Annotated[str, "Name of the new branch to create"],
+    base_branch: Annotated[Optional[str], "Base branch to create from (defaults to repo's default branch)"] = None,
 ) -> Dict[str, Any]:
     """Create a new branch in a repository."""
     github = Github(context.authorization.token)
@@ -85,11 +85,11 @@ def create_branch(
 )
 def commit_changes(
     context: ToolContext,
-    repo_full_name: str,
-    branch: str,
-    file_path: str,
-    content: str,
-    commit_message: str,
+    repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
+    branch: Annotated[str, "Branch name to commit to"],
+    file_path: Annotated[str, "Path to the file in the repository"],
+    content: Annotated[str, "New content of the file"],
+    commit_message: Annotated[str, "Commit message describing the changes"],
 ) -> Dict[str, Any]:
     """Commit changes to a file in a repository."""
     github = Github(context.authorization.token)
@@ -128,11 +128,11 @@ def commit_changes(
 )
 def create_pull_request(
     context: ToolContext,
-    repo_full_name: str,
-    title: str,
-    body: str,
-    head_branch: str,
-    base_branch: Optional[str] = None,
+    repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
+    title: Annotated[str, "Title of the pull request"],
+    body: Annotated[str, "Description of the pull request"],
+    head_branch: Annotated[str, "Branch containing the changes"],
+    base_branch: Annotated[Optional[str], "Branch to merge into (defaults to repo's default branch)"] = None,
 ) -> Dict[str, Any]:
     """Create a pull request in a repository."""
     github = Github(context.authorization.token)
@@ -166,11 +166,11 @@ def create_pull_request(
 )
 def create_issue(
     context: ToolContext,
-    repo_full_name: str,
-    title: str,
-    body: str,
-    labels: Optional[List[str]] = None,
-    assignees: Optional[List[str]] = None,
+    repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
+    title: Annotated[str, "Title of the issue"],
+    body: Annotated[str, "Description of the issue"],
+    labels: Annotated[Optional[List[str]], "List of label names to apply"] = None,
+    assignees: Annotated[Optional[List[str]], "List of usernames to assign"] = None,
 ) -> Dict[str, Any]:
     """Create an issue in a repository."""
     github = Github(context.authorization.token)
@@ -201,9 +201,9 @@ def create_issue(
 )
 def comment_on_pr(
     context: ToolContext,
-    repo_full_name: str,
-    pr_number: int,
-    comment: str,
+    repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
+    pr_number: Annotated[int, "Pull request number"],
+    comment: Annotated[str, "Comment text to post"],
 ) -> Dict[str, Any]:
     """Leave a comment on a pull request."""
     github = Github(context.authorization.token)
