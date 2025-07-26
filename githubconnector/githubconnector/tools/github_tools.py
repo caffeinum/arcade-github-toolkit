@@ -26,10 +26,13 @@ def list_recent_repos(
     include_private: Annotated[bool, "Whether to include private repositories"] = True,
 ) -> List[str]:
     """List recent repositories the user has access to."""
+    if not context.authorization:
+        raise ValueError("Authorization required")
+    
     github = Github(context.authorization.token)
     user = github.get_user()
     
-    repos = []
+    repos: List[str] = []
     for repo in user.get_repos(sort="updated", direction="desc"):
         if len(repos) >= limit:
             break
@@ -62,8 +65,11 @@ def create_branch(
     repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
     branch_name: Annotated[str, "Name of the new branch to create"],
     base_branch: Annotated[Optional[str], "Base branch to create from (defaults to repo's default branch)"] = None,
-) -> Dict[str, Any]:
+) -> str:
     """Create a new branch in a repository."""
+    if not context.authorization:
+        raise ValueError("Authorization required")
+    
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
     
@@ -73,12 +79,12 @@ def create_branch(
     base_ref = repo.get_branch(base_branch)
     repo.create_git_ref(f"refs/heads/{branch_name}", base_ref.commit.sha)
     
-    return {
+    return json.dumps({
         "branch_name": branch_name,
         "base_branch": base_branch,
         "created": True,
         "url": f"{repo.html_url}/tree/{branch_name}",
-    }
+    })
 
 
 @tool(
@@ -93,18 +99,25 @@ def commit_changes(
     file_path: Annotated[str, "Path to the file in the repository"],
     content: Annotated[str, "New content of the file"],
     commit_message: Annotated[str, "Commit message describing the changes"],
-) -> Dict[str, Any]:
+) -> str:
     """Commit changes to a file in a repository."""
+    if not context.authorization:
+        raise ValueError("Authorization required")
+    
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
     
     try:
-        file = repo.get_contents(file_path, ref=branch)
+        contents = repo.get_contents(file_path, ref=branch)
+        # get_contents can return a list if path is a directory
+        if isinstance(contents, list):
+            raise ValueError(f"{file_path} is a directory, not a file")
+        
         result = repo.update_file(
             path=file_path,
             message=commit_message,
             content=content,
-            sha=file.sha,
+            sha=contents.sha,
             branch=branch,
         )
     except GithubException:
@@ -115,13 +128,13 @@ def commit_changes(
             branch=branch,
         )
     
-    return {
+    return json.dumps({
         "file_path": file_path,
         "commit_sha": result["commit"].sha,
         "commit_message": commit_message,
         "branch": branch,
         "url": result["content"].html_url,
-    }
+    })
 
 
 @tool(
@@ -136,8 +149,11 @@ def create_pull_request(
     body: Annotated[str, "Description of the pull request"],
     head_branch: Annotated[str, "Branch containing the changes"],
     base_branch: Annotated[Optional[str], "Branch to merge into (defaults to repo's default branch)"] = None,
-) -> Dict[str, Any]:
+) -> str:
     """Create a pull request in a repository."""
+    if not context.authorization:
+        raise ValueError("Authorization required")
+    
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
     
@@ -151,7 +167,7 @@ def create_pull_request(
         base=base_branch,
     )
     
-    return {
+    return json.dumps({
         "number": pr.number,
         "title": pr.title,
         "url": pr.html_url,
@@ -159,7 +175,7 @@ def create_pull_request(
         "created_at": pr.created_at.isoformat(),
         "head_branch": head_branch,
         "base_branch": base_branch,
-    }
+    })
 
 
 @tool(
@@ -174,8 +190,11 @@ def create_issue(
     body: Annotated[str, "Description of the issue"],
     labels: Annotated[Optional[List[str]], "List of label names to apply"] = None,
     assignees: Annotated[Optional[List[str]], "List of usernames to assign"] = None,
-) -> Dict[str, Any]:
+) -> str:
     """Create an issue in a repository."""
+    if not context.authorization:
+        raise ValueError("Authorization required")
+    
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
     
@@ -186,7 +205,7 @@ def create_issue(
         assignees=assignees or [],
     )
     
-    return {
+    return json.dumps({
         "number": issue.number,
         "title": issue.title,
         "url": issue.html_url,
@@ -194,7 +213,7 @@ def create_issue(
         "created_at": issue.created_at.isoformat(),
         "labels": [label.name for label in issue.labels],
         "assignees": [user.login for user in issue.assignees],
-    }
+    })
 
 
 @tool(
@@ -207,18 +226,21 @@ def comment_on_pr(
     repo_full_name: Annotated[str, "Full name of the repository (owner/repo)"],
     pr_number: Annotated[int, "Pull request number"],
     comment: Annotated[str, "Comment text to post"],
-) -> Dict[str, Any]:
+) -> str:
     """Leave a comment on a pull request."""
+    if not context.authorization:
+        raise ValueError("Authorization required")
+    
     github = Github(context.authorization.token)
     repo = github.get_repo(repo_full_name)
     pr = repo.get_pull(pr_number)
     
     comment_obj = pr.create_issue_comment(comment)
     
-    return {
+    return json.dumps({
         "comment_id": comment_obj.id,
         "pr_number": pr_number,
         "comment": comment,
         "created_at": comment_obj.created_at.isoformat(),
         "url": comment_obj.html_url,
-    }
+    })
